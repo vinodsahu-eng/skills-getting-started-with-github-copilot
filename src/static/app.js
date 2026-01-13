@@ -13,6 +13,9 @@ document.addEventListener("DOMContentLoaded", () => {
       // Clear loading message
       activitiesList.innerHTML = "";
 
+      // Clear previous options (keep placeholder)
+      activitySelect.querySelectorAll('option:not([value=""])').forEach((o) => o.remove());
+
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
         const activityCard = document.createElement("div");
@@ -20,11 +23,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
-        activityCard.innerHTML = `
-          <h4>${name}</h4>
-          <p>${details.description}</p>
+        // Build participants HTML
+        const participants = details.participants || [];
+        const participantsHTML =
+          participants.length === 0
+            ? `<p class="info">No participants yet</p>`
+          : `<ul class="participants-list">${participants.map((p) => `<li>${p} <span class="delete-icon" data-email="${p}">🗑️</span></li>`).join("")}</ul>`;
           <p><strong>Schedule:</strong> ${details.schedule}</p>
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          <div class="participants-section">
+            <strong>Participants:</strong>
+            ${participantsHTML}
+          </div>
         `;
 
         activitiesList.appendChild(activityCard);
@@ -62,6 +72,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        // Refresh activities to show the new participant
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
@@ -78,6 +90,40 @@ document.addEventListener("DOMContentLoaded", () => {
       messageDiv.className = "error";
       messageDiv.classList.remove("hidden");
       console.error("Error signing up:", error);
+    }
+  });
+
+  // Handle unregister clicks (using event delegation)
+  activitiesList.addEventListener("click", async (event) => {
+    if (!event.target.classList.contains("delete-icon")) return;
+    const email = event.target.dataset.email;
+    const activityCard = event.target.closest(".activity-card");
+    const activityName = activityCard.querySelector("h4").textContent;
+
+    try {
+      const res = await fetch(`/activities/${encodeURIComponent(activityName)}/unregister?email=${encodeURIComponent(email)}`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        messageDiv.textContent = data.message;
+        messageDiv.className = "success";
+        messageDiv.classList.remove("hidden");
+        // Refresh activities to show changes
+        fetchActivities();
+        setTimeout(() => {
+          messageDiv.classList.add("hidden");
+        }, 5000);
+      } else {
+        messageDiv.textContent = data.detail || "An error occurred";
+        messageDiv.className = "error";
+        messageDiv.classList.remove("hidden");
+      }
+    } catch (err) {
+      console.error("Error unregistering:", err);
+      messageDiv.textContent = "Failed to unregister. Please try again.";
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
     }
   });
 
